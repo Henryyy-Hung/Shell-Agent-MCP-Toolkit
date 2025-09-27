@@ -2,9 +2,10 @@ from typing import Annotated
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import warnings
-from mcp_shell_toolkit.clients.mobaxterm import RemoteShell
+from mcp_shell_toolkit.clients.remote_shell_client import RemoteShellClient
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto.application")
+
 
 def create_server() -> FastMCP:
     mcp_server = FastMCP(name="hw-mcp-demo")
@@ -16,7 +17,7 @@ def create_server() -> FastMCP:
     def write_to_remote_shell(
             command: Annotated[str, Field(description="要执行的命令")],
     ) -> str:
-        shell = RemoteShell(r"C:\Users\henry\Desktop")
+        shell = RemoteShellClient(r"C:\Users\henry\Desktop")
         try:
             output = shell.send_command(command, timeout=600)
         finally:
@@ -30,3 +31,7 @@ def main():
     print("Starting MCP server...")
     mcp = create_server()
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,33 @@ import threading
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
 
+from mcp_shell_toolkit.types import RemoteShellType
+
+
+class XshellWindowFinder:
+    def __init__(self, exe_path=None):
+        self.exe_path = exe_path
+        self.app = None
+
+    def connect(self):
+        if self.exe_path and os.path.exists(self.exe_path):
+            # 启动 Xshell
+            self.app = Application(backend="win32").start(self.exe_path)
+        else:
+            # 通过窗口类名查找 Xshell 主窗口
+            # 通常 Xshell 窗口类名为 "Xshell6" 或 "Xshell5"，你可以用 inspect.exe 或 pywinauto 自带的 print_control_identifiers() 来确认
+            hwnds = findwindows.find_windows(title_re=".*Xshell.*")  # 根据实际版本调整
+            if not hwnds:
+                raise RuntimeError("未找到 Xshell 窗口")
+            self.app = Application(backend="win32").connect(handle=hwnds[0])
+
+    def get_terminal_ctrl(self):
+        if not self.app:
+            self.connect()
+        main_win = self.app.window(title_re=".*Xshell.*")  # 换成实际的类名
+        # main_win.print_control_identifiers()  # 调试用
+        return main_win
+
 
 class MobaXtermWindowFinder:
     def __init__(self, exe_path=None):
@@ -101,10 +128,24 @@ class LogTailer:
         self._thread.join(timeout=1)
 
 
-class RemoteShell:
+class RemoteShellClient:
 
-    def __init__(self, log_dir: str):
-        self.injector = CommandInjector()
+    def __init__(self, remote_shell_type: RemoteShellType, log_dir: str) -> None:
+        """通过远程终端执行命令并获取输出。
+        Args:
+            remote_shell_type (RemoteShellType): 远程终端类型
+            log_dir (str): 远程终端日志文件目录
+        Raises:
+            ValueError: 不支持的远程终端类型
+        """
+        # 初始化命令注入器
+        if remote_shell_type == RemoteShellType.XShell:
+            self.injector = CommandInjector(window_finder=XshellWindowFinder())
+        elif remote_shell_type == RemoteShellType.MobaXterm:
+            self.injector = CommandInjector(window_finder=MobaXtermWindowFinder())
+        else:
+            raise ValueError("不支持的远程终端类型")
+        # 初始化日志读取器
         self.tailer = LogTailer(log_dir)
 
     def send_command(self, cmd: str, timeout: float = 60.0) -> str:
@@ -137,7 +178,7 @@ class RemoteShell:
 
 
 if __name__ == "__main__":
-    shell = RemoteShell(log_dir=r"C:\Users\henry\Desktop")
+    shell = RemoteShellClient(log_dir=r"C:\Users\henry\Desktop")
     try:
         out = shell.send_command("sleep 3 && ls", timeout=5)
         print("命令输出:\n", out)
