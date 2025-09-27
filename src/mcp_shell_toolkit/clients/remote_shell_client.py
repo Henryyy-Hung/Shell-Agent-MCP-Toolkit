@@ -130,7 +130,7 @@ class LogTailer:
 
 class RemoteShellClient:
 
-    def __init__(self, remote_shell_type: RemoteShellType, log_dir: str) -> None:
+    def __init__(self, remote_shell_type: RemoteShellType, log_dir: str | None) -> None:
         """通过远程终端执行命令并获取输出。
         Args:
             remote_shell_type (RemoteShellType): 远程终端类型
@@ -145,6 +145,8 @@ class RemoteShellClient:
             self.injector = CommandInjector(window_finder=MobaXtermWindowFinder())
         else:
             raise ValueError("不支持的远程终端类型")
+        if not log_dir or not os.path.isdir(log_dir):
+            raise ValueError("无效的日志目录")
         # 初始化日志读取器
         self.tailer = LogTailer(log_dir)
 

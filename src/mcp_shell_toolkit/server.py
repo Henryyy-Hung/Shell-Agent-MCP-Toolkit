@@ -3,6 +3,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import warnings
 from mcp_shell_toolkit.clients.remote_shell_client import RemoteShellClient
+from mcp_shell_toolkit.configs import RemoteShellConfig
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto.application")
 
@@ -17,11 +18,13 @@ def create_server() -> FastMCP:
     def write_to_remote_shell(
             command: Annotated[str, Field(description="要执行的命令")],
     ) -> str:
-        shell = RemoteShellClient(r"C:\Users\henry\Desktop")
+        current_shell_type = RemoteShellConfig.CURRENT_SHELL
+        log_dir = RemoteShellConfig.get_current_shell_log_dir()
+        remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         try:
-            output = shell.send_command(command, timeout=600)
+            output = remote_shell_client.send_command(command)
         finally:
-            shell.close()
+            remote_shell_client.close()
         return output
 
     return mcp_server
