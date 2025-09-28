@@ -7,6 +7,7 @@ dependencies = [
     "hatchling>=1.27.0",
     "keyboard>=0.13.5",
     "mcp[cli]>=1.15.0",
+    "pyinstaller>=6.16.0",
     "pyperclip>=1.11.0",
     "pywin32>=311",
     "pywinauto>=0.6.9",
