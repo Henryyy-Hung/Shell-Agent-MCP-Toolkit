@@ -10,7 +10,29 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto.applic
 
 
 def create_server() -> FastMCP:
-    mcp_server = FastMCP(name="hw-mcp-demo")
+
+    mcp_server = FastMCP(name="remote_shell_toolkit")
+
+    @mcp_server.tool(
+        title="获取系统信息",
+        description="获取远程终端所在系统的信息"
+    )
+    def get_sys_info() -> str:
+        return write_to_remote_shell("uname -a")
+
+    @mcp_server.tool(
+        title="获取命令历史",
+        description="获取远程终端的命令历史记录"
+    )
+    def get_history() -> str:
+        current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
+        log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
+        remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
+        try:
+            output = remote_shell_client.get_history()
+        finally:
+            remote_shell_client.close()
+        return output
 
     @mcp_server.tool(
         title="写入远程终端",
@@ -27,6 +49,27 @@ def create_server() -> FastMCP:
         finally:
             remote_shell_client.close()
         return output
+
+    @mcp_server.tool(
+        title="开始录制",
+        description="开始录制远程终端的日志"
+    )
+    def start_record() -> bool:
+        return True
+
+    @mcp_server.tool(
+        title="停止录制",
+        description="停止录制远程终端的日志"
+    )
+    def stop_record() -> bool:
+        return True
+
+    @mcp_server.tool(
+        title="检索记忆",
+        description="检索用户录制的操作过程"
+    )
+    def retrieve_memory() -> bool:
+        return True
 
     return mcp_server
 

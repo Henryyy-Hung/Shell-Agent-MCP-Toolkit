@@ -6,6 +6,7 @@ import threading
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
 
+from mcp_shell_toolkit.configs import RemoteShellConfig
 from mcp_shell_toolkit.types import RemoteShellType
 
 
@@ -103,7 +104,13 @@ class LogTailer:
     def _clean_ansi(cls, text: str) -> str:
         return cls.ANSI_ESCAPE.sub('', text)
 
-    def _tail(self):
+    def read_full_log(self) -> str:
+        with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            clean = self._clean_ansi(content)
+            return clean
+
+    def _tail(self) -> None:
         with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
             f.seek(0, os.SEEK_END)
             while not self._stop_event.is_set():
@@ -111,13 +118,15 @@ class LogTailer:
                 if not line:
                     time.sleep(0.05)
                     continue
-                clean = self._clean_ansi(line.rstrip("\r\n"))
+                clean = self._clean_ansi(line)
                 with self._lock:
                     self._lines.append(clean)
 
-    def read_all(self):
+    def read_all(self) -> list[str]:
         with self._lock:
-            return list(self._lines)
+            raw_text = ''.join(self._lines)
+            lines = [i.strip('\r') for i in raw_text.split('\n')]
+            return lines
 
     def clear(self):
         with self._lock:
@@ -150,18 +159,39 @@ class RemoteShellClient:
         # 初始化日志读取器
         self.tailer = LogTailer(log_dir)
 
+    def get_history(self) -> str:
+        """获取当前日志中的所有历史记录。
+        Returns:
+            str: 历史记录
+        """
+        content = self.tailer.read_full_log()
+        return f"```log\n{content}\n```"
+
     def send_command(self, cmd: str, timeout: float = 60.0) -> str:
+        """发送命令并等待输出结果。
+        Args:
+            cmd (str): 要执行的命令
+            timeout (float): 等待命令输出的超时时间，单位秒
+        Returns:
+            str: 命令输出结果
+        Raises:
+            TimeoutError: 命令输出等待超时
+        """
         uid = uuid.uuid4().hex[:8]
-        start_marker = f"Agent Mode Start {uid}"
-        end_marker = f"Agent Mode End {uid}"
-        wrapped_cmd = f"echo {start_marker}; {cmd}; echo {end_marker}"
+        start_marker = f">>>>>> Agent Session {uid} Start"
+        end_marker = f">>>>>> Agent Session {uid} End"
+        wrapped_cmd = (
+            f"printf '{start_marker}\\n\\n'; " +
+            f"{cmd}; " +
+            f"printf '\\n{end_marker}' "
+        )
         self.tailer.clear()
         self.injector.inject(wrapped_cmd)
         start_time = time.time()
         started = False
         captured = []
         while True:
-            if time.time() - start_time > timeout:
+            if time.time() - start_time > timeout * 1000:
                 raise TimeoutError("命令输出等待超时")
             lines = self.tailer.read_all()
             for line in lines:
@@ -170,7 +200,7 @@ class RemoteShellClient:
                     captured.clear()
                     continue
                 if end_marker == line and started:
-                    return "\n".join(l for l in captured if l.strip()).strip()
+                    return '\n'.join(captured)
                 if started:
                     captured.append(line)
             time.sleep(0.5)
@@ -180,9 +210,11 @@ class RemoteShellClient:
 
 
 if __name__ == "__main__":
-    shell = RemoteShellClient(log_dir=r"C:\Users\henry\Desktop")
+    current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
+    log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
+    remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
     try:
-        out = shell.send_command("sleep 3 && ls", timeout=5)
-        print("命令输出:\n", out)
+        output = remote_shell_client.send_command("sleep 1; ls -la")
+        print(output)
     finally:
-        shell.close()
+        remote_shell_client.close()
