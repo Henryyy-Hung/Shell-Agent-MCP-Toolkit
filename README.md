@@ -15,7 +15,7 @@
 在根目录下创建`.env`文件，添加以下内容：
 
 ```dotenv
-# 当前远程终端类型，可以是 'MobaXterm' 或 'XShell'，默认是 'MobaXterm'
+# 当前远程终端类型，可以是 'MobaXterm' 或 'Xshell'，默认是 'MobaXterm'
 CURRENT_SHELL='MobaXterm'
 # MobaXterm 日志文件目录
 MOBAXTERM_LOG_DIR='C:\Users\henry\.shell-agent\mobaxterm'
