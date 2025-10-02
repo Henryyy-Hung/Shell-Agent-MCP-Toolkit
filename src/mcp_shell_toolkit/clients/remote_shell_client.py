@@ -5,6 +5,7 @@ import uuid
 import threading
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
+import tiktoken
 
 from mcp_shell_toolkit.configs import RemoteShellConfig
 from mcp_shell_toolkit.types import RemoteShellType
@@ -104,12 +105,6 @@ class LogTailer:
     def _clean_ansi(cls, text: str) -> str:
         return cls.ANSI_ESCAPE.sub('', text)
 
-    def read_full_log(self) -> str:
-        with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-            clean = self._clean_ansi(content)
-            return clean
-
     def _tail(self) -> None:
         with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
             f.seek(0, os.SEEK_END)
@@ -122,13 +117,19 @@ class LogTailer:
                 with self._lock:
                     self._lines.append(clean)
 
-    def read_all(self) -> list[str]:
+    def read_all_content(self) -> list[str]:
+        with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            clean = self._clean_ansi(content)
+            return clean.split('\n')
+
+    def read_tailed_content(self) -> list[str]:
         with self._lock:
             raw_text = ''.join(self._lines)
             lines = [i.strip('\r') for i in raw_text.split('\n')]
             return lines
 
-    def clear(self):
+    def clear_tailed_content(self):
         with self._lock:
             self._lines.clear()
 
@@ -159,13 +160,30 @@ class RemoteShellClient:
         # 初始化日志读取器
         self.tailer = LogTailer(log_dir)
 
-    def get_history(self) -> str:
-        """获取当前日志中的所有历史记录。
-        Returns:
-            str: 历史记录
+    def get_history(self, max_tokens: int = 1024, model_name: str = "gpt-4"):
         """
-        content = self.tailer.read_full_log()
-        return f"```log\n{content}\n```"
+        精确限制 tokens，保留尽可能多的关键信息（最新的命令和输出）。
+        Args:
+            max_tokens: 最大 token 数
+            model_name: 模型对应的 tokenizer 名称
+        """
+        enc = tiktoken.encoding_for_model(model_name)
+        lines = self.tailer.read_all_content()
+        # 从最新的行开始反向拼接
+        result_lines = []
+        total_tokens = 0
+        for line in reversed(lines):
+            if not line.strip():
+                continue  # 去掉纯空行
+            # 计算新增行的tokens
+            line_tokens = len(enc.encode(line)) + 1  # +1 代表换行符近似
+            if total_tokens + line_tokens > max_tokens:
+                break
+            result_lines.append(line)
+            total_tokens += line_tokens
+        # 反转为正常时间顺序
+        result_lines.reverse()
+        return "```log\n" + "\n".join(result_lines) + "\n```"
 
     def send_command(self, cmd: str, timeout: float = 60.0) -> str:
         """发送命令并等待输出结果。
@@ -185,7 +203,7 @@ class RemoteShellClient:
             f"{cmd}; " +
             f"printf '\\n{end_marker}' "
         )
-        self.tailer.clear()
+        self.tailer.clear_tailed_content()
         self.injector.inject(wrapped_cmd)
         start_time = time.time()
         started = False
@@ -193,7 +211,7 @@ class RemoteShellClient:
         while True:
             if time.time() - start_time > timeout * 1000:
                 raise TimeoutError("命令输出等待超时")
-            lines = self.tailer.read_all()
+            lines = self.tailer.read_tailed_content()
             for line in lines:
                 if start_marker == line:
                     started = True

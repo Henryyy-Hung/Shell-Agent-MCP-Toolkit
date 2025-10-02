@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Dict, List
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import warnings
@@ -66,10 +66,19 @@ def create_server() -> FastMCP:
 
     @mcp_server.tool(
         title="检索记忆",
-        description="检索用户录制的操作过程"
+        description="检索与输入内容相关的记忆"
     )
-    def retrieve_memory() -> bool:
-        return True
+    def get_sop_list() -> List[Dict[str, str]]:
+        return [
+            {"id": "Cloud SOP 换包", "description": "更换CloudSop框架的部署包"},
+        ]
+
+    @mcp_server.tool(
+        title="获取记忆详情",
+        description="获取指定记忆的详细内容"
+    )
+    def get_sop() -> str:
+        return ""
 
     return mcp_server
 
