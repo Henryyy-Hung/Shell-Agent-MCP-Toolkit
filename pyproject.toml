@@ -1,13 +1,12 @@
 [project]
 name = "hw-mcp-shell-toolkit"
-version = "0.1.1"
-description = "Add your description here"
+version = "0.1.9"
+description = "Shell Agent 的妙妙工具箱"
 requires-python = ">=3.13"
 dependencies = [
     "hatchling>=1.27.0",
     "keyboard>=0.13.5",
-    "mcp[cli]>=1.15.0",
-    "pillow>=11.3.0",
+    "mcp[cli]>=1.16.0",
     "pyinstaller>=6.16.0",
     "pyperclip>=1.11.0",
     "pywin32>=311",

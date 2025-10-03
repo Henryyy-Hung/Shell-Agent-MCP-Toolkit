@@ -5,6 +5,8 @@ import warnings
 from mcp_shell_toolkit.clients.remote_shell_client import RemoteShellClient
 from mcp_shell_toolkit.configs import RemoteShellConfig
 from mcp_shell_toolkit.types import RemoteShellType
+import os
+import json
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto.application")
 
@@ -56,11 +58,29 @@ def create_server() -> FastMCP:
         title="停止录制",
         description="停止录制远程终端的日志"
     )
-    def stop_record() -> str:
+    def stop_record(
+            sop_name: Annotated[str, Field(description="标准操作流程名称")],
+            sop_description: Annotated[str, Field(description="标准操作流程描述")],
+    ) -> str:
         current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
         log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
-        return remote_shell_client.stop_record()
+        result = remote_shell_client.stop_record()
+        # 写入同一目录下的./data下的sop.json文件中
+        sop_data_path = os.path.join(os.path.dirname(os.getcwd()), "sop.json")
+        if not os.path.exists(sop_data_path):
+            with open(sop_data_path, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False, indent=4)
+        with open(sop_data_path, "r", encoding="utf-8") as f:
+            sop_list = json.load(f)
+        sop_list.append({
+            "id": sop_name,
+            "description": sop_description,
+            "content": result
+        })
+        with open(sop_data_path, "w", encoding="utf-8") as f:
+            json.dump(sop_list, f, ensure_ascii=False, indent=4)
+        return result
 
     @mcp_server.tool(
         title="检索记忆",
