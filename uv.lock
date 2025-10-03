@@ -174,7 +174,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hw-mcp-shell-toolkit"
+name = "hw-remote-shell-toolkit"
 version = "0.1.9"
 source = { editable = "." }
 dependencies = [

@@ -9,8 +9,8 @@ from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
 import tiktoken
 
-from mcp_shell_toolkit.configs import RemoteShellConfig
-from mcp_shell_toolkit.types import RemoteShellType
+from remote_shell_toolkit.configs import RemoteShellConfig
+from remote_shell_toolkit.types import RemoteShellType
 
 
 class XshellWindowFinder:

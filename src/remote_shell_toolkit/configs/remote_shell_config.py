@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 
-from mcp_shell_toolkit.types import RemoteShellType
+from remote_shell_toolkit.types import RemoteShellType
 
 load_dotenv()
 

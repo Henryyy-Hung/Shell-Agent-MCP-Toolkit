@@ -188,3 +188,5 @@ fabric.properties
 /data
 
 fastagent.secrets.yaml
+
+sop.json

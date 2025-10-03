@@ -1,10 +1,11 @@
+from pathlib import Path
 from typing import Annotated, Dict, List
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import warnings
-from mcp_shell_toolkit.clients.remote_shell_client import RemoteShellClient
-from mcp_shell_toolkit.configs import RemoteShellConfig
-from mcp_shell_toolkit.types import RemoteShellType
+from remote_shell_toolkit.clients.remote_shell_client import RemoteShellClient
+from remote_shell_toolkit.configs import RemoteShellConfig
+from remote_shell_toolkit.types import RemoteShellType
 import os
 import json
 
@@ -67,7 +68,7 @@ def create_server() -> FastMCP:
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         result = remote_shell_client.stop_record()
         # 写入同一目录下的./data下的sop.json文件中
-        sop_data_path = os.path.join(os.path.dirname(os.getcwd()), "sop.json")
+        sop_data_path = os.path.join(Path.cwd(), "./sop.json")
         if not os.path.exists(sop_data_path):
             with open(sop_data_path, "w", encoding="utf-8") as f:
                 json.dump([], f, ensure_ascii=False, indent=4)
@@ -87,16 +88,43 @@ def create_server() -> FastMCP:
         description="检索与输入内容相关的记忆"
     )
     def get_sop_list() -> List[Dict[str, str]]:
-        return [
-            {"id": "Cloud SOP 换包", "description": "更换CloudSop框架的部署包"},
-        ]
+        """
+        返回可用的 SOP 列表，每项包含 id 和 description。
+        如果 sop.json 不存在或内容格式不正确，返回空列表。
+        """
+        sop_data_path = os.path.join(Path.cwd(), "sop.json")
+        if not os.path.exists(sop_data_path):
+            return []
+        with open(sop_data_path, "r", encoding="utf-8") as f:
+            sop_list = json.load(f)
+        result: List[Dict[str, str]] = []
+        for item in sop_list:
+            sid = str(item.get("id", "")) if isinstance(item, dict) else ""
+            desc = str(item.get("description", "")) if isinstance(item, dict) else ""
+            if sid or desc:  # 只包含至少有一个标识或描述的项
+                result.append({"id": sid, "description": desc})
+        return result
 
     @mcp_server.tool(
         title="获取记忆详情",
         description="获取指定记忆的详细内容"
     )
-    def get_sop() -> str:
-        return ""
+    def get_sop(
+            sop_id: Annotated[str, Field(description="要获取的 SOP 的 id")]
+    ) -> str:
+        sop_data_path = os.path.join(Path.cwd(), "sop.json")
+        if not os.path.exists(sop_data_path):
+            return f"sop 数据文件未找到: {sop_data_path}"
+        with open(sop_data_path, "r", encoding="utf-8") as f:
+            sop_list = json.load(f)
+        if not isinstance(sop_list, list):
+            return "sop 数据格式不正确，期待一个列表。"
+        for item in sop_list:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("id", "")) == sop_id:
+                return str(item.get("content", item.get("description", "")))
+        return f"未找到 id 为 '{sop_id}' 的 SOP。"
 
     return mcp_server
 
