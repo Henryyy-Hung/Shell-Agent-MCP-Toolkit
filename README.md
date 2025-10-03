@@ -52,7 +52,7 @@ uv build
 ### 2.2 生成可执行文件
 
 ```bash
-pyinstaller --onefile --name mcp_shell_toolkit src/mcp_shell_toolkit/server.py
+pyinstaller --onefile --name remote_shell_toolkit --icon=favicon.ico src/mcp_shell_toolkit/server.py
 ```
 
 ## 3 接入服务
@@ -69,7 +69,7 @@ pyinstaller --onefile --name mcp_shell_toolkit src/mcp_shell_toolkit/server.py
       "command": "uv",
       "args": [
         "--directory",
-        "C:\\Users\\henry\\PycharmProjects\\mcp-shell-toolkit",
+        "D:\\ProgramData\\Visual Studio Code\\Shell-Agent\\Shell-Agent-MCP-Toolkit",
         "run",
         "hw-mcp-shell-toolkit"
       ]

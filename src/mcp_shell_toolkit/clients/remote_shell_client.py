@@ -3,6 +3,8 @@ import re
 import time
 import uuid
 import threading
+from typing import List
+
 from pywinauto import Application, findwindows
 from pywinauto.keyboard import send_keys
 import tiktoken
@@ -89,8 +91,7 @@ class LogTailer:
         self._lock = threading.Lock()
         self._lines = []
         self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._tail, daemon=True)
-        self._thread.start()
+        self._thread = None
 
     @staticmethod
     def _find_latest_log(log_dir: str):
@@ -105,6 +106,11 @@ class LogTailer:
     def _clean_ansi(cls, text: str) -> str:
         return cls.ANSI_ESCAPE.sub('', text)
 
+    def start(self) -> None:
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._tail, daemon=True)
+        self._thread.start()
+
     def _tail(self) -> None:
         with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
             f.seek(0, os.SEEK_END)
@@ -117,13 +123,13 @@ class LogTailer:
                 with self._lock:
                     self._lines.append(clean)
 
-    def read_all_content(self) -> list[str]:
+    def read_all_content(self) -> List[str]:
         with open(self.log_file, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
             clean = self._clean_ansi(content)
             return clean.split('\n')
 
-    def read_tailed_content(self) -> list[str]:
+    def read_tailed_content(self) -> List[str]:
         with self._lock:
             raw_text = ''.join(self._lines)
             lines = [i.strip('\r') for i in raw_text.split('\n')]
@@ -134,11 +140,17 @@ class LogTailer:
             self._lines.clear()
 
     def stop(self):
+        """停止日志监听线程"""
         self._stop_event.set()
-        self._thread.join(timeout=1)
+        if self._thread:
+            self._thread.join(timeout=1)
+        self._thread = None
 
 
 class RemoteShellClient:
+
+    START_RECORD_MARKER = ">>>>>> Start Recording"
+    END_RECORD_MARKER = ">>>>>> End Recording"
 
     def __init__(self, remote_shell_type: RemoteShellType, log_dir: str) -> None:
         """通过远程终端执行命令并获取输出。
@@ -158,6 +170,7 @@ class RemoteShellClient:
         if not os.path.isdir(log_dir):
             raise ValueError("无效的日志目录")
         # 初始化日志读取器
+        self.log_dir = log_dir
         self.tailer = LogTailer(log_dir)
 
     def get_history(self, max_tokens: int = 1024, model_name: str = "gpt-4"):
@@ -185,6 +198,22 @@ class RemoteShellClient:
         result_lines.reverse()
         return "```log\n" + "\n".join(result_lines) + "\n```"
 
+    def start_record(self) -> None:
+        """开始录制日志"""
+        self.injector.inject(f"printf '{self.START_RECORD_MARKER}\\n'")
+
+    def stop_record(self) -> str:
+        """停止录制日志"""
+        lines = reversed(self.tailer.read_all_content())
+        recording: List[str] = []
+        for line in lines:
+            if self.START_RECORD_MARKER == line:
+                return '\n'.join(reversed(recording))
+            recording.append(line)
+        time.sleep(0.05)
+        self.injector.inject(f"printf '{self.END_RECORD_MARKER}\\n'")
+        return '\n'.join(recording)
+
     def send_command(self, cmd: str, timeout: float = 60.0) -> str:
         """发送命令并等待输出结果。
         Args:
@@ -203,36 +232,36 @@ class RemoteShellClient:
             f"{cmd}; " +
             f"printf '\\n{end_marker}' "
         )
-        self.tailer.clear_tailed_content()
-        self.injector.inject(wrapped_cmd)
-        start_time = time.time()
-        started = False
-        captured = []
-        while True:
-            if time.time() - start_time > timeout * 1000:
-                raise TimeoutError("命令输出等待超时")
-            lines = self.tailer.read_tailed_content()
-            for line in lines:
-                if start_marker == line:
-                    started = True
-                    captured.clear()
-                    continue
-                if end_marker == line and started:
-                    return '\n'.join(captured)
-                if started:
-                    captured.append(line)
-            time.sleep(0.5)
 
-    def close(self):
-        self.tailer.stop()
+        # 启动日志监听
+        self.tailer.start()
+        self.tailer.clear_tailed_content()
+        try:
+            self.injector.inject(wrapped_cmd)
+            start_time = time.time()
+            started = False
+            captured = []
+            while True:
+                if time.time() - start_time > timeout * 1000:
+                    raise TimeoutError("命令输出等待超时")
+                lines = self.tailer.read_tailed_content()
+                for line in lines:
+                    if start_marker == line:
+                        started = True
+                        captured.clear()
+                        continue
+                    if end_marker == line and started:
+                        return '\n'.join(captured)
+                    if started:
+                        captured.append(line)
+                time.sleep(0.5)
+        finally:
+            self.tailer.stop()
 
 
 if __name__ == "__main__":
     current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
     log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
     remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
-    try:
-        output = remote_shell_client.send_command("sleep 1; ls -la")
-        print(output)
-    finally:
-        remote_shell_client.close()
+    output = remote_shell_client.get_history()
+    print(output)
