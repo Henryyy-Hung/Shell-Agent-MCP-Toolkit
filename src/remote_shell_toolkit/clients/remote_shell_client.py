@@ -196,7 +196,7 @@ class RemoteShellClient:
             total_tokens += line_tokens
         # 反转为正常时间顺序
         result_lines.reverse()
-        return "```log\n" + "\n".join(result_lines) + "\n```"
+        return "remote shell log\n\n```plaintext\n" + "\n".join(result_lines) + "\n```"
 
     def start_record(self) -> None:
         """开始录制日志"""
@@ -233,26 +233,31 @@ class RemoteShellClient:
             f"printf '\\n{end_marker}' "
         )
 
-        # 启动日志监听
-        self.tailer.start()
-        self.tailer.clear_tailed_content()
         try:
+            self.tailer.start()
+            self.tailer.clear_tailed_content()
+            self.injector.inject("")
+            time.sleep(0.2)
             self.injector.inject(wrapped_cmd)
             start_time = time.time()
-            started = False
-            captured = []
             while True:
                 if time.time() - start_time > timeout * 1000:
                     raise TimeoutError("命令输出等待超时")
+                started = False
+                captured = []
                 lines = self.tailer.read_tailed_content()
                 for line in lines:
-                    if start_marker == line:
+                    if not started and start_marker in line:
                         started = True
                         captured.clear()
+                        captured.append(line.replace(wrapped_cmd, cmd).strip())
                         continue
-                    if end_marker == line and started:
-                        return '\n'.join(captured)
                     if started:
+                        if start_marker == line:
+                            continue
+                        if end_marker == line:
+                            result = '\n'.join([i for i in captured if i.strip() != ""])
+                            return f"""remote shell log\n\n```plaintext\n{result}\n```"""
                         captured.append(line)
                 time.sleep(0.5)
         finally:
@@ -263,5 +268,5 @@ if __name__ == "__main__":
     current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
     log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
     remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
-    output = remote_shell_client.get_history()
+    output = remote_shell_client.send_command("uname -a")
     print(output)

@@ -18,7 +18,7 @@ def create_server() -> FastMCP:
 
     @mcp_server.tool(
         title="获取当前远程终端元信息",
-        description="获取远程终端所在系统的信息"
+        description="获取必要信息，包括 系统时间， 工作目录， 操作系统"
     )
     def get_sys_info() -> str:
         return write_to_remote_shell("uname -a")
