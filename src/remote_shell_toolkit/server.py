@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import Annotated, Dict, List
 from mcp.server.fastmcp import FastMCP
@@ -12,9 +13,14 @@ import json
 warnings.filterwarnings("ignore", category=UserWarning, module="pywinauto.application")
 
 
-def create_server() -> FastMCP:
+def create_server(current_shell_type: RemoteShellType | None, log_dir: str | None) -> FastMCP:
 
     mcp_server = FastMCP(name="remote_shell_toolkit")
+
+    if current_shell_type is None:
+        current_shell_type = RemoteShellConfig.get_current_shell_type()
+    if log_dir is None:
+        log_dir = RemoteShellConfig.get_current_shell_log_dir()
 
     @mcp_server.tool(
         title="获取当前远程终端元信息",
@@ -28,8 +34,6 @@ def create_server() -> FastMCP:
         description="获取当前远程终端的交互历史记录"
     )
     def get_history() -> str:
-        current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
-        log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         return remote_shell_client.get_history()
 
@@ -40,8 +44,6 @@ def create_server() -> FastMCP:
     def write_to_remote_shell(
             command: Annotated[str, Field(description="要执行的命令")],
     ) -> str:
-        current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
-        log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         return remote_shell_client.send_command(command)
 
@@ -50,8 +52,6 @@ def create_server() -> FastMCP:
         description="开始录制远程终端的日志"
     )
     def start_record() -> None:
-        current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
-        log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         remote_shell_client.start_record()
 
@@ -63,8 +63,6 @@ def create_server() -> FastMCP:
             sop_name: Annotated[str, Field(description="标准操作流程名称")],
             sop_description: Annotated[str, Field(description="标准操作流程描述")],
     ) -> str:
-        current_shell_type: RemoteShellType = RemoteShellConfig.get_current_shell_type()
-        log_dir: str = RemoteShellConfig.get_current_shell_log_dir()
         remote_shell_client = RemoteShellClient(current_shell_type, log_dir)
         result = remote_shell_client.stop_record()
         # 写入同一目录下的./data下的sop.json文件中
@@ -131,9 +129,16 @@ def create_server() -> FastMCP:
 
 def main():
     print("Starting MCP server...")
-    mcp = create_server()
+    current_shell_type: RemoteShellType | None = None
+    log_dir: str | None = None
+    if len(sys.argv) >= 2:
+        current_shell_type = RemoteShellType(sys.argv[1])
+    if len(sys.argv) >= 3:
+        log_dir = sys.argv[2]
+    if current_shell_type not in [RemoteShellType.MobaXterm, RemoteShellType.XShell]:
+        current_shell_type = None
+    mcp = create_server(current_shell_type, log_dir)
     mcp.run()
-
 
 if __name__ == "__main__":
     main()
